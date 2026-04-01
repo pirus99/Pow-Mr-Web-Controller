@@ -1,0 +1,196 @@
+<div class="page">
+  <div class="flex flex-center gap-16" style="margin-bottom:20px">
+    <h1>🤖 Automation Rules</h1>
+    <button class="btn btn-primary" (click)="openCreate()">+ New Rule</button>
+  </div>
+
+  <div *ngIf="message" class="card"
+       [style.background]="messageType === 'success' ? '#e8f5e9' : '#ffebee'"
+       style="padding:12px 16px; margin-bottom:16px">
+    {{ message }}
+  </div>
+
+  <!-- Rule Form -->
+  <div *ngIf="showForm" class="card">
+    <div class="card-header">
+      <h2>{{ editingRule ? 'Edit Rule' : 'New Automation Rule' }}</h2>
+      <button class="btn btn-outline btn-sm" (click)="cancelForm()">Cancel</button>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Rule Name *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="e.g. Grid when excess solar" />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" [(ngModel)]="form.description" placeholder="Optional description" />
+      </div>
+    </div>
+
+    <h3 style="margin-bottom:12px">Condition</h3>
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Metric Source</label>
+        <select [(ngModel)]="form.metric_source">
+          <option *ngFor="let s of sources" [value]="s.value">{{ s.label }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Metric Name</label>
+        <input type="text" [(ngModel)]="form.metric_name" list="metric-hints"
+               placeholder="e.g. solax_feedin_power_watts" />
+        <datalist id="metric-hints">
+          <option *ngFor="let h of currentHints" [value]="h"></option>
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label>Label Filters (JSON, optional)</label>
+        <input type="text" [ngModel]="form.metric_labels | json"
+               (ngModelChange)="form.metric_labels = tryParseJson($event)"
+               placeholder='e.g. {"inverter": "garage"}' />
+      </div>
+      <div class="form-group">
+        <label>Operator</label>
+        <select [(ngModel)]="form.operator">
+          <option *ngFor="let op of operators" [value]="op">{{ op }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Threshold</label>
+        <input type="number" [(ngModel)]="form.threshold" step="any" />
+      </div>
+      <div class="form-group">
+        <label>Duration (seconds) – how long condition must hold</label>
+        <input type="number" [(ngModel)]="form.duration_seconds" min="0" />
+      </div>
+    </div>
+
+    <h3 style="margin-bottom:12px">Action (when condition is met)</h3>
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Register to Write</label>
+        <select [(ngModel)]="form.action_register">
+          <option *ngFor="let r of registers" [value]="r">{{ r }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Value to Write</label>
+        <input type="number" [(ngModel)]="form.action_value" />
+      </div>
+    </div>
+
+    <h3 style="margin-bottom:12px">Reset Action (optional – when condition clears)</h3>
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Reset Register</label>
+        <select [(ngModel)]="form.reset_register">
+          <option value="">– none –</option>
+          <option *ngFor="let r of registers" [value]="r">{{ r }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Reset Value</label>
+        <input type="number" [(ngModel)]="form.reset_value" [disabled]="!form.reset_register" />
+      </div>
+      <div class="form-group">
+        <label>Reset Duration (seconds)</label>
+        <input type="number" [(ngModel)]="form.reset_duration_seconds" min="0" [disabled]="!form.reset_register" />
+      </div>
+    </div>
+
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" (click)="saveRule()" [disabled]="saving || !form.name || !form.metric_name">
+        {{ saving ? 'Saving…' : (editingRule ? 'Update Rule' : 'Create Rule') }}
+      </button>
+      <button class="btn btn-outline" (click)="cancelForm()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Rules list -->
+  <div class="card">
+    <div class="card-header"><h2>Rules ({{ rules.length }})</h2></div>
+    <div *ngIf="rules.length === 0" class="info-msg">No rules defined yet. Create one above.</div>
+
+    <table *ngIf="rules.length > 0">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Condition</th>
+          <th>Action</th>
+          <th>Last Triggered</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let rule of rules">
+          <td>
+            <strong>{{ rule.name }}</strong>
+            <div class="info-msg" *ngIf="rule.description">{{ rule.description }}</div>
+          </td>
+          <td>
+            <code>{{ rule.metric_source }}:{{ rule.metric_name }}</code>
+            <span *ngIf="rule.metric_labels && objectKeys(rule.metric_labels).length">
+              {{ labelJson(rule.metric_labels) }}
+            </span>
+            {{ rule.operator }} {{ rule.threshold }}
+            <span *ngIf="rule.duration_seconds"> for {{ rule.duration_seconds }}s</span>
+          </td>
+          <td>
+            <code>{{ rule.action_register }}={{ rule.action_value }}</code>
+            <div *ngIf="rule.reset_register" class="info-msg">
+              reset: {{ rule.reset_register }}={{ rule.reset_value }}
+            </div>
+          </td>
+          <td>{{ rule.last_triggered ? (rule.last_triggered | date:'dd.MM. HH:mm') : '–' }}</td>
+          <td>
+            <span class="badge" [class]="rule.enabled ? 'badge-success' : 'badge-warning'">
+              {{ rule.enabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </td>
+          <td>
+            <div class="flex gap-8">
+              <button class="btn btn-outline btn-sm" (click)="openEdit(rule)">Edit</button>
+              <button class="btn btn-outline btn-sm" (click)="toggleRule(rule)">
+                {{ rule.enabled ? 'Disable' : 'Enable' }}
+              </button>
+              <button class="btn btn-danger btn-sm" (click)="deleteRule(rule)">Delete</button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Logs -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Recent Activity Log</h2>
+      <button class="btn btn-outline btn-sm" (click)="loadLogs()">Refresh</button>
+    </div>
+    <div *ngIf="logs.length === 0" class="info-msg">No automation activity yet.</div>
+    <table *ngIf="logs.length > 0">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Rule</th>
+          <th>Action</th>
+          <th>Message</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let log of logs">
+          <td>{{ log.timestamp | date:'dd.MM.yy HH:mm:ss' }}</td>
+          <td>{{ log.rule_name }}</td>
+          <td>
+            <span class="badge" [class]="logActionClass(log.action)">{{ log.action }}</span>
+          </td>
+          <td>{{ log.message }}</td>
+          <td>{{ log.metric_value != null ? log.metric_value.toFixed(2) : '–' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

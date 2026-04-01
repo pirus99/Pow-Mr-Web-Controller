@@ -1,0 +1,309 @@
+<div class="page">
+  <div class="flex flex-center gap-16" style="margin-bottom:20px">
+    <h1>System Dashboard</h1>
+    <span *ngIf="loading" class="spinner"></span>
+    <span *ngIf="lastUpdated" class="info-msg">Updated: {{ lastUpdated | date:'HH:mm:ss' }}</span>
+  </div>
+
+  <!-- ===== PowMr Inverter ===== -->
+  <div class="card">
+    <div class="card-header">
+      <h2>⚡ PowMr Inverter</h2>
+      <span *ngIf="inverter?.connected" class="badge badge-success">
+        <span class="status-dot dot-green"></span>Connected
+      </span>
+      <span *ngIf="!inverter?.connected" class="badge badge-danger">
+        <span class="status-dot dot-red"></span>Offline
+      </span>
+    </div>
+
+    <div *ngIf="inverter?.error" class="error-msg">{{ inverter?.error }}</div>
+
+    <div *ngIf="inverter?.connected" class="grid grid-3">
+      <!-- Battery -->
+      <div>
+        <h3>🔋 Battery</h3>
+        <div class="metric-row">
+          <span class="metric-label">Voltage</span>
+          <span class="metric-value">{{ formatVal(inverter?.battery_voltage, 'V') }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">State of Charge</span>
+          <span class="metric-value">{{ inverter?.battery_soc ?? '–' }}%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" [class]="socColor(inverter?.battery_soc)"
+               [style.width.%]="inverter?.battery_soc ?? 0"></div>
+        </div>
+        <div class="metric-row mt-8">
+          <span class="metric-label">Charge Current</span>
+          <span class="metric-value">{{ formatVal(inverter?.battery_charge_current, 'A') }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Discharge Current</span>
+          <span class="metric-value">{{ formatVal(inverter?.battery_discharge_current, 'A') }}</span>
+        </div>
+      </div>
+
+      <!-- AC / PV -->
+      <div>
+        <h3>☀️ Solar & AC</h3>
+        <div class="metric-row">
+          <span class="metric-label">PV Voltage</span>
+          <span class="metric-value">{{ formatVal(inverter?.pv_voltage, 'V') }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">AC Voltage</span>
+          <span class="metric-value">{{ formatVal(inverter?.ac_voltage, 'V') }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">AC Frequency</span>
+          <span class="metric-value">{{ formatVal(inverter?.ac_frequency, 'Hz', 2) }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Temperature</span>
+          <span class="metric-value">{{ formatVal(inverter?.temperature, '°C', 0) }}</span>
+        </div>
+      </div>
+
+      <!-- Load -->
+      <div>
+        <h3>🔌 Load</h3>
+        <div class="metric-row">
+          <span class="metric-label">Load Power</span>
+          <span class="metric-value">{{ formatVal(inverter?.load_power, 'W', 0) }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Load VA</span>
+          <span class="metric-value">{{ formatVal(inverter?.load_va, 'VA', 0) }}</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Load %</span>
+          <span class="metric-value">{{ inverter?.load_percent ?? '–' }}%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" [class]="loadColor(inverter?.load_percent)"
+               [style.width.%]="inverter?.load_percent ?? 0"></div>
+        </div>
+        <div class="metric-row mt-8">
+          <span class="metric-label">Source Priority</span>
+          <span class="metric-value" style="font-size:0.85rem">
+            {{ inverter?.output_source_priority_label ?? '–' }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Charger Priority</span>
+          <span class="metric-value" style="font-size:0.85rem">
+            {{ inverter?.charger_source_priority_label ?? '–' }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Charger</span>
+          <span class="metric-value">{{ inverter?.charger_status_label ?? '–' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Solax Metrics ===== -->
+  <div class="card">
+    <div class="card-header">
+      <h2>🌞 Solax Inverters</h2>
+      <span *ngIf="solax?.error" class="badge badge-danger">Error</span>
+      <span *ngIf="!solax?.error && solax" class="badge badge-success">OK</span>
+    </div>
+    <div *ngIf="solax?.error" class="error-msg">{{ solax?.error }}</div>
+
+    <div *ngIf="!solax?.error && solax" class="grid grid-2">
+      <!-- Per-inverter cards -->
+      <ng-container *ngFor="let inv of ['garage', 'huette']">
+        <div class="card" style="margin-bottom:0;box-shadow:none;border:1px solid var(--border)">
+          <h3>Inverter: {{ inv }}</h3>
+          <div class="metric-row">
+            <span class="metric-label">Grid Power</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_grid_power_watts', {inverter: inv}), 'W', 0) }}
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Grid Voltage</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_grid_voltage_volts', {inverter: inv}), 'V') }}
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">PV1 Power</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_pv1_power_watts', {inverter: inv}), 'W', 0) }}
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Daily Energy</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_daily_energy_kwh', {inverter: inv}), 'kWh') }}
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Total Energy</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_total_energy_kwh', {inverter: inv}), 'kWh') }}
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Temperature</span>
+            <span class="metric-value">
+              {{ formatVal(getMetric(solax, 'solax_inverter_temperature_celsius', {inverter: inv}), '°C', 0) }}
+            </span>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Feed-in / Import (garage only) -->
+      <div class="card" style="margin-bottom:0;box-shadow:none;border:1px solid var(--border)">
+        <h3>Grid Feed-in (garage)</h3>
+        <div class="metric-row">
+          <span class="metric-label">Feed-in Power</span>
+          <span class="metric-value">
+            <span class="badge" [class]="feedinClass(getMetric(solax, 'solax_feedin_power_watts', {inverter: 'garage'}))">
+              {{ formatFeedin(getMetric(solax, 'solax_feedin_power_watts', {inverter: 'garage'})) }}
+            </span>
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Total Exported</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(solax, 'solax_total_feed_energy_kwh', {inverter: 'garage'}), 'kWh') }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Total Imported</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(solax, 'solax_total_import_energy_kwh', {inverter: 'garage'}), 'kWh') }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Battery BMS ===== -->
+  <div class="card">
+    <div class="card-header">
+      <h2>🔋 Daly BMS Battery</h2>
+      <span *ngIf="battery?.error" class="badge badge-danger">Error</span>
+      <span *ngIf="!battery?.error && battery" class="badge badge-success">OK</span>
+    </div>
+    <div *ngIf="battery?.error" class="error-msg">{{ battery?.error }}</div>
+
+    <div *ngIf="!battery?.error && battery" class="grid grid-3">
+      <div>
+        <h3>Pack</h3>
+        <div class="metric-row">
+          <span class="metric-label">Pack Voltage</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_pack_voltage_volts'), 'V') }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">SoC</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_soc_percent'), '%') }}
+          </span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"
+               [class]="socColor(getMetric(battery, 'daly_bms_soc_percent'))"
+               [style.width.%]="getMetric(battery, 'daly_bms_soc_percent') ?? 0"></div>
+        </div>
+        <div class="metric-row mt-8">
+          <span class="metric-label">Current (A)</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_pack_current_amperes'), 'A') }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Remaining Ah</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_remaining_capacity_ampere_hours'), 'Ah') }}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <h3>Cells</h3>
+        <div class="metric-row">
+          <span class="metric-label">Cell Count</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_cell_count'), '', 0) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cell Max V</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_cell_voltage_max_volts'), 'V', 3) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cell Min V</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_cell_voltage_min_volts'), 'V', 3) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Delta V</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_cell_voltage_delta_volts'), 'V', 3) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cycles</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_charge_discharge_cycles_total'), '', 0) }}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <h3>Status</h3>
+        <div class="metric-row">
+          <span class="metric-label">Temperature Max</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_temperature_max_celsius'), '°C', 0) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Temperature Min</span>
+          <span class="metric-value">
+            {{ formatVal(getMetric(battery, 'daly_bms_temperature_min_celsius'), '°C', 0) }}
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Charge MOS</span>
+          <span class="metric-value">
+            <span class="badge"
+                  [class]="getMetric(battery, 'daly_bms_charge_mos_active') ? 'badge-success' : 'badge-danger'">
+              {{ getMetric(battery, 'daly_bms_charge_mos_active') ? 'Active' : 'Off' }}
+            </span>
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Discharge MOS</span>
+          <span class="metric-value">
+            <span class="badge"
+                  [class]="getMetric(battery, 'daly_bms_discharge_mos_active') ? 'badge-success' : 'badge-danger'">
+              {{ getMetric(battery, 'daly_bms_discharge_mos_active') ? 'Active' : 'Off' }}
+            </span>
+          </span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">BMS Status</span>
+          <span class="metric-value">
+            <span class="badge"
+                  [class]="getMetric(battery, 'daly_bms_up') === 1 ? 'badge-success' : 'badge-danger'">
+              {{ getMetric(battery, 'daly_bms_up') === 1 ? 'Online' : 'Offline' }}
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

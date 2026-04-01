@@ -1,0 +1,120 @@
+<div class="page">
+  <h1 style="margin-bottom:20px">⚙️ Inverter Control</h1>
+
+  <div *ngIf="message" class="card" [ngClass]="messageType === 'success' ? 'badge-success' : 'badge-danger'"
+       style="padding:12px 16px">
+    {{ message }}
+  </div>
+
+  <!-- Status overview -->
+  <div class="card">
+    <div class="card-header"><h2>Current Status</h2></div>
+    <div *ngIf="!status" class="info-msg">Loading...</div>
+    <div *ngIf="status && !status.connected" class="error-msg">
+      Inverter offline – {{ status.error }}
+    </div>
+    <div *ngIf="status?.connected" class="grid grid-3">
+      <div class="metric-row">
+        <span class="metric-label">Output Priority</span>
+        <span class="metric-value">{{ status?.output_source_priority_label ?? '–' }}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Charger Priority</span>
+        <span class="metric-value">{{ status?.charger_source_priority_label ?? '–' }}</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Utility Charge A</span>
+        <span class="metric-value">{{ status?.max_utility_charge_current ?? '–' }} A</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Battery SoC</span>
+        <span class="metric-value">{{ status?.battery_soc ?? '–' }}%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Battery Voltage</span>
+        <span class="metric-value">{{ status?.battery_voltage?.toFixed(1) ?? '–' }} V</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Charger Status</span>
+        <span class="metric-value">{{ status?.charger_status_label ?? '–' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Controls -->
+  <div class="card">
+    <div class="card-header"><h2>Quick Controls</h2></div>
+
+    <div class="grid grid-2">
+      <!-- Output Source Priority -->
+      <div class="form-group">
+        <label>Output Source Priority</label>
+        <div class="flex gap-8">
+          <select [(ngModel)]="selectedOutputPriority" [disabled]="saving">
+            <option *ngFor="let opt of options?.output_source_priority" [value]="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+          <button class="btn btn-primary" (click)="setRegister('output_source_priority', selectedOutputPriority)" [disabled]="saving">
+            Apply
+          </button>
+        </div>
+      </div>
+
+      <!-- Charger Source Priority -->
+      <div class="form-group">
+        <label>Charger Source Priority</label>
+        <div class="flex gap-8">
+          <select [(ngModel)]="selectedChargerPriority" [disabled]="saving">
+            <option *ngFor="let opt of options?.charger_source_priority" [value]="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+          <button class="btn btn-primary" (click)="setRegister('charger_source_priority', selectedChargerPriority)" [disabled]="saving">
+            Apply
+          </button>
+        </div>
+      </div>
+
+      <!-- Utility Charge Current -->
+      <div class="form-group">
+        <label>Utility Charge Current (A)</label>
+        <div class="flex gap-8">
+          <select [(ngModel)]="selectedUtilityChargeCurrent" [disabled]="saving">
+            <option *ngFor="let v of options?.utility_charge_current" [value]="v">{{ v }} A</option>
+          </select>
+          <button class="btn btn-primary" (click)="setRegister('utility_charge_current', selectedUtilityChargeCurrent)" [disabled]="saving">
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advanced / Custom Register Write -->
+  <div class="card">
+    <div class="card-header"><h2>Advanced: Write Register</h2></div>
+    <div class="grid grid-2">
+      <div class="form-group">
+        <label>Register Name</label>
+        <select [(ngModel)]="customRegister" [disabled]="saving">
+          <option value="">– select register –</option>
+          <option *ngFor="let r of options?.registers" [value]="r">{{ r }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Value</label>
+        <div class="flex gap-8">
+          <input type="number" [(ngModel)]="customValue" [disabled]="saving" placeholder="Integer value" />
+          <button class="btn btn-primary" (click)="writeCustom()"
+                  [disabled]="saving || !customRegister || customValue === null">
+            Write
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="info-msg">
+      ⚠️ Advanced: Refer to the PowMr register map before writing values you are unsure about.
+    </p>
+  </div>
+</div>
