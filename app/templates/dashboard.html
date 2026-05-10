@@ -353,6 +353,8 @@ async function buildControls(d) {
 }
 
 function syncControls(d) {
+  const convertBooleanToRegisterValue = (value) => typeof value === 'boolean' ? (value ? 1 : 0) : null;
+
   // Map PowMr data keys to register numbers for pre-filling
   const MAP = {
     5018: d.output_source_priority,
@@ -364,6 +366,11 @@ function syncControls(d) {
     5027: d.bulk_charge_voltage,
     5028: d.float_charge_voltage,
     5029: d.low_cutoff_voltage,
+    5002: convertBooleanToRegisterValue(d.alarm_enabled),
+    5005: convertBooleanToRegisterValue(d.restart_on_overload),
+    5006: convertBooleanToRegisterValue(d.restart_on_overheat),
+    5007: convertBooleanToRegisterValue(d.beep_on_primary_fail),
+    5009: convertBooleanToRegisterValue(d.overload_bypass),
   };
   Object.entries(MAP).forEach(([reg, val]) => {
     const el = document.getElementById(`ctrl-${reg}`);
