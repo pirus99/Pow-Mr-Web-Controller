@@ -78,19 +78,23 @@ def _is_client_connected(client: Any) -> bool:
     if client is None:
         return False
     for attr_name in ('connected', 'is_socket_open'):
-        attr = getattr(client, attr_name, None)
         try:
+            # getattr is inside try because a property getter may raise
+            attr = getattr(client, attr_name, None)
             if callable(attr):
                 return bool(attr())
             if attr is not None:
                 return bool(attr)
         except Exception:
             continue
-    transport = getattr(client, 'transport', None)
-    if transport is not None:
-        is_open = getattr(transport, 'is_open', None)
-        if isinstance(is_open, bool):
-            return is_open
+    try:
+        transport = getattr(client, 'transport', None)
+        if transport is not None:
+            is_open = getattr(transport, 'is_open', None)
+            if isinstance(is_open, bool):
+                return is_open
+    except Exception:
+        pass
     return False
 
 
@@ -112,11 +116,16 @@ def _reset_client() -> None:
 
 def _build_client():
     try:
-        from pymodbus import FramerType
+        try:
+            from pymodbus import FramerType
+            framer = FramerType.RTU
+        except ImportError:
+            # pymodbus < 3.6 uses a plain string for the framer
+            framer = 'rtu'
         from pymodbus.client import ModbusSerialClient
         client = ModbusSerialClient(
             port=settings.POWMR_PORT,
-            framer=FramerType.RTU,
+            framer=framer,
             baudrate=settings.POWMR_BAUDRATE,
             bytesize=settings.POWMR_BYTESIZE,
             parity=settings.POWMR_PARITY,
@@ -236,7 +245,13 @@ def read_inverter_status() -> Optional[Dict[str, Any]]:
     Read and parse all inverter status and settings registers.
     Returns a dict of all values, or None on failure.
     """
-    client = _get_client()
+    try:
+        client = _get_client()
+    except Exception as exc:
+        logger.error("Error obtaining inverter client: %s", exc)
+        _reset_client()
+        return None
+
     if client is None:
         return None
 
@@ -282,7 +297,13 @@ def write_register(register_name: str, value: int) -> bool:
         logger.error("Unknown register name: %s", register_name)
         return False
 
-    client = _get_client()
+    try:
+        client = _get_client()
+    except Exception as exc:
+        logger.error("Error obtaining inverter client: %s", exc)
+        _reset_client()
+        return False
+
     if client is None:
         return False
 

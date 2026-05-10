@@ -55,6 +55,14 @@ class ModbusClientConnectionTest(TestCase):
         self.assertTrue(modbus_client._is_client_connected(ClientWithMethod()))
         self.assertFalse(modbus_client._is_client_connected(None))
 
+    def test_is_client_connected_ignores_raising_property(self):
+        """A property getter that raises must not propagate out of _is_client_connected."""
+        class ClientWithRaisingProperty:
+            @property
+            def connected(self):
+                raise RuntimeError("socket gone")
+        self.assertFalse(modbus_client._is_client_connected(ClientWithRaisingProperty()))
+
     @patch('pymodbus.client.ModbusSerialClient')
     def test_get_client_recreates_disconnected_client(self, mock_serial_client):
         stale_client = Mock()
