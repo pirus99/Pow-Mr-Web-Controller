@@ -222,6 +222,9 @@ class PowMrClient:
         with self._lock:
             try:
                 self._ensure_connected()
+                # Keep writes unswapped: pymodbus packs the provided integer into the
+                # Modbus register payload correctly for this inverter. Swapping here
+                # would turn small values (e.g. 1, 2, 10) into 0x0100/0x0200/0x0A00.
                 result = self._client.write_register(
                     address=address, value=int(value) & 0xFFFF, slave=SLAVE_ID
                 )
