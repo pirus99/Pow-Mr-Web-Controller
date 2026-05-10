@@ -246,7 +246,11 @@ class PowMrClient:
         )
         if hasattr(result, "isError") and result.isError():
             raise IOError(f"Modbus error reading {count} regs @ {address}: {result}")
-        return result.registers
+        # The PowMr inverter transmits each 16-bit register in little-endian byte
+        # order (low byte first), which is non-standard for Modbus RTU.  pymodbus
+        # expects big-endian (high byte first), so every raw value has its two bytes
+        # swapped.  Correct by swapping them back before returning.
+        return [((v & 0xFF) << 8) | ((v >> 8) & 0xFF) for v in result.registers]
 
     @staticmethod
     def _decode(r1, r2):
@@ -258,9 +262,9 @@ class PowMrClient:
         settings_flags = r1[34]   # reg 4535
         status_flags   = r2[7]    # reg 4553
 
-        # Temperature at reg 4557 (index 11 of r2): stored as value − 90 °C
+        # Temperature at reg 4557 (index 11 of r2): stored directly in °C.
         raw_temp = r2[11] if len(r2) > 11 else 0
-        temperature = (raw_temp - 90) if raw_temp > 0 else None
+        temperature = raw_temp if raw_temp > 0 else None
 
         data = {
             # ── Measurements ────────────────────────────────────────────────
