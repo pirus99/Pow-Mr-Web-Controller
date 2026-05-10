@@ -82,12 +82,22 @@ def create_rule(name, enabled, interval_seconds, cooldown_seconds, conditions, a
 
 
 def update_rule(rule_id, **kwargs):
-    allowed = {"name", "enabled", "interval_seconds", "cooldown_seconds", "conditions", "action"}
+    # Each entry maps the caller's key to the exact SQL fragment (no user input
+    # ever reaches the query string itself — only bound parameters).
+    _FIELD_SQL = {
+        "name":             "name = ?",
+        "enabled":          "enabled = ?",
+        "interval_seconds": "interval_seconds = ?",
+        "cooldown_seconds": "cooldown_seconds = ?",
+        "conditions":       "conditions = ?",
+        "action":           "action = ?",
+    }
     sets, values = [], []
     for k, v in kwargs.items():
-        if k not in allowed:
+        sql_fragment = _FIELD_SQL.get(k)
+        if sql_fragment is None:
             continue
-        sets.append(f"{k} = ?")
+        sets.append(sql_fragment)
         if k in ("conditions", "action") and not isinstance(v, str):
             v = json.dumps(v)
         elif k == "enabled":
@@ -96,8 +106,10 @@ def update_rule(rule_id, **kwargs):
     if not sets:
         return
     values.append(rule_id)
+    # `sets` contains only hardcoded strings from _FIELD_SQL; no injection risk.
+    sql = "UPDATE rules SET " + ", ".join(sets) + " WHERE id = ?"
     with _connect() as conn:
-        conn.execute(f"UPDATE rules SET {', '.join(sets)} WHERE id = ?", values)
+        conn.execute(sql, values)
         conn.commit()
 
 

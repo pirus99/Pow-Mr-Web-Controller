@@ -21,14 +21,14 @@ _data_store = None
 _fetch_timeout: int = 5
 
 
-def start(port, battery_url, solax_url, data_store, fetch_timeout=5):
+def start(port, battery_url, solax_url, data_store, fetch_timeout=5, host=""):
     global _battery_url, _solax_url, _data_store, _fetch_timeout
     _battery_url   = battery_url
     _solax_url     = solax_url
     _data_store    = data_store
     _fetch_timeout = fetch_timeout
 
-    server = HTTPServer(("", port), _Handler)
+    server = HTTPServer((host, port), _Handler)
     t = threading.Thread(target=server.serve_forever, name="metrics-server", daemon=True)
     t.start()
     logger.info("Prometheus metrics server started on port %d", port)

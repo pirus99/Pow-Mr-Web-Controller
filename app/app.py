@@ -108,7 +108,10 @@ def start_services():
     _rules_engine.start()
 
     # Prometheus re-export server
-    metrics_srv.start(METRICS_PORT, BATTERY_URL, SOLAX_URL, _data_store, FETCH_TIMEOUT)
+    metrics_srv.start(
+        METRICS_PORT, BATTERY_URL, SOLAX_URL, _data_store, FETCH_TIMEOUT,
+        host=os.getenv("METRICS_HOST", "0.0.0.0"),
+    )
 
     logger.info(
         "PowMr Web Controller started – web: %s:%d  metrics: :%d  poll: %ds",
@@ -195,7 +198,8 @@ def api_powmr_control():
 
     if ok:
         return jsonify({"success": True})
-    return jsonify({"error": err}), 500
+    logger.error("PowMr control write failed: %s", err)
+    return jsonify({"error": "Failed to apply setting – check server logs."}), 500
 
 
 # ── API – Rules ───────────────────────────────────────────────────────────────
@@ -218,8 +222,10 @@ def api_create_rule():
             conditions       = body["conditions"],
             action           = body["action"],
         )
-    except (KeyError, ValueError) as exc:
-        return jsonify({"error": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"error": f"Missing required field: {exc}"}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid field value"}), 400
 
     rule = get_rule(rule_id)
     _rules_engine.on_rule_created(rule)
