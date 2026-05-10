@@ -7,6 +7,7 @@ Exposes:
 """
 
 import logging
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -57,10 +58,12 @@ def _build_metrics():
     parts = []
 
     # ── BMS metrics ───────────────────────────────────────────────────────────
-    parts.append(_fetch_filtered(_battery_url, "daly_bms_"))
+    if os.getenv("EXPOSE_BMS_METRICS", "True") == "True":
+        parts.append(_fetch_filtered(_battery_url, "daly_bms_"))
 
     # ── Solax metrics ─────────────────────────────────────────────────────────
-    parts.append(_fetch_filtered(_solax_url, "solax_"))
+    if os.getenv("EXPOSE_SOLAX_METRICS", "True") == "True":
+        parts.append(_fetch_filtered(_solax_url, "solax_"))
 
     # ── PowMr metrics ─────────────────────────────────────────────────────────
     if _data_store:
