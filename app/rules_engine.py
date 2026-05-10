@@ -192,7 +192,7 @@ class RulesEngine:
         self.powmr  = powmr_client
         self.db     = db_module
         self._sched = None
-        self._cooldowns: dict[int, datetime] = {}
+        self._cooldowns: "dict[int, datetime]" = {}
         self._lock  = threading.Lock()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────

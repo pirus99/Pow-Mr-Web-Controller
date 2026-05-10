@@ -5,6 +5,7 @@ import logging
 import os
 import signal
 import sys
+from typing import Optional
 
 from flask import Flask, jsonify, render_template, request
 
@@ -57,9 +58,9 @@ app.secret_key = SECRET_KEY
 
 # ── Globals (initialised in start_services) ───────────────────────────────────
 
-_data_store: DataStore | None = None
-_powmr_client: PowMrClient | None = None
-_rules_engine: RulesEngine | None = None
+_data_store: Optional[DataStore] = None
+_powmr_client: Optional[PowMrClient] = None
+_rules_engine: Optional[RulesEngine] = None
 _poll_scheduler = None
 
 
