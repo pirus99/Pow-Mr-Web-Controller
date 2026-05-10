@@ -281,6 +281,7 @@ class PowMrClient:
             "ac_input_voltage":          r1[1]  / 10.0,   # 4502
             "ac_input_frequency":        r1[2]  / 10.0,   # 4503
             "pv_voltage":                r1[3]  / 10.0,   # 4504
+            "pv_power":                  r1[4],           # 4505
             "battery_voltage":           r1[5]  / 10.0,   # 4506
             "battery_soc":               r1[6],            # 4507
             "battery_charge_current":    r1[7]  / 10.0,   # 4508
@@ -347,5 +348,10 @@ class PowMrClient:
             data["charger_source_priority"], "Unknown"
         )
         data["charger_status_label"] = CHARGER_STATUS.get(data["charger_status"], "Unknown")
+        data["pv_current"] = (
+            round(data["pv_power"] / data["pv_voltage"], 1)
+            if data.get("pv_voltage")
+            else None
+        )
 
         return data

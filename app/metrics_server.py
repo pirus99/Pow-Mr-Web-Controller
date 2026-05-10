@@ -104,6 +104,8 @@ _POWMR_METRICS = [
     ("powmr_ac_input_voltage_volts",         "gauge", "AC input voltage (V)",                      "ac_input_voltage"),
     ("powmr_ac_input_frequency_hertz",       "gauge", "AC input frequency (Hz)",                   "ac_input_frequency"),
     ("powmr_pv_voltage_volts",               "gauge", "PV input voltage (V)",                      "pv_voltage"),
+    ("powmr_pv_power_watts",                 "gauge", "PV input power (W)",                        "pv_power"),
+    ("powmr_pv_current_amperes",             "gauge", "PV input current (A)",                      "pv_current"),
     ("powmr_load_voltage_volts",             "gauge", "Load voltage (V)",                          "load_voltage"),
     ("powmr_load_power_watts",               "gauge", "Load power (W)",                            "load_power"),
     ("powmr_load_va",                        "gauge", "Load apparent power (VA)",                  "load_va"),

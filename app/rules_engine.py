@@ -41,6 +41,8 @@ AVAILABLE_METRICS = {
         "battery_voltage":           "Battery Voltage (V)",
         "battery_charge_current":    "Battery Charge Current (A)",
         "battery_discharge_current": "Battery Discharge Current (A)",
+        "pv_power":                  "PV Power (W)",
+        "pv_current":                "PV Current (A)",
         "load_power":                "Load Power (W)",
         "load_percent":              "Load Percent (%)",
         "ac_input_voltage":          "AC Input Voltage (V)",
