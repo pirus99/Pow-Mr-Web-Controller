@@ -298,21 +298,38 @@ class PowMrClient:
             "float_charge_voltage":      r2[1]  / 10.0,   # 4547
             "low_cutoff_voltage":        r2[2]  / 10.0,   # 4548
             # ── Status flags ─────────────────────────────────────────────────
-            "on_battery":   flag(status_flags, 0x100),
-            "ac_active":    flag(status_flags, 0x200),
-            "load_enabled": flag(status_flags, 0x4000),
+            # _read_holding byte-swaps every register value, so the masks below
+            # are the byte-swapped equivalents of the register-map bit values:
+            #   Register map (raw)  →  corrected mask used here
+            #       0x0100          →  0x01
+            #       0x0200          →  0x02
+            #       0x4000          →  0x40
+            "on_battery":   flag(status_flags, 0x01),
+            "ac_active":    flag(status_flags, 0x02),
+            "load_enabled": flag(status_flags, 0x40),
             "charger_status": r2[9] if len(r2) > 9 else 0,  # 4555
             "temperature":  temperature,
             # ── Settings flags ───────────────────────────────────────────────
-            "alarm_enabled":          flag(settings_flags, 0x100),
-            "backlight_enabled":      flag(settings_flags, 0x400),
-            "restart_on_overload":    flag(settings_flags, 0x800),
-            "restart_on_overheat":    flag(settings_flags, 0x1000),
-            "beep_on_primary_fail":   flag(settings_flags, 0x2000),
-            "return_to_default_screen": flag(settings_flags, 0x4000),
-            "overload_bypass":        flag(settings_flags, 0x8000),
-            "battery_equalization":   flag(settings_flags, 0x2),
-            "record_fault_code":      flag(settings_flags, 0x1),
+            # Same byte-swap rule as status flags above.
+            #   Register map (raw)  →  corrected mask used here
+            #       0x0001          →  0x100
+            #       0x0002          →  0x200
+            #       0x0100          →  0x01
+            #       0x0400          →  0x04
+            #       0x0800          →  0x08
+            #       0x1000          →  0x10
+            #       0x2000          →  0x20
+            #       0x4000          →  0x40
+            #       0x8000          →  0x80
+            "alarm_enabled":          flag(settings_flags, 0x01),
+            "backlight_enabled":      flag(settings_flags, 0x04),
+            "restart_on_overload":    flag(settings_flags, 0x08),
+            "restart_on_overheat":    flag(settings_flags, 0x10),
+            "beep_on_primary_fail":   flag(settings_flags, 0x20),
+            "return_to_default_screen": flag(settings_flags, 0x40),
+            "overload_bypass":        flag(settings_flags, 0x80),
+            "battery_equalization":   flag(settings_flags, 0x200),
+            "record_fault_code":      flag(settings_flags, 0x100),
         }
 
         # Human-readable labels
