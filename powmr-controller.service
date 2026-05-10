@@ -1,0 +1,18 @@
+[Unit]
+Description=PowMr Web Controller
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/powmr-controller/app
+EnvironmentFile=/opt/powmr-controller/app/.env
+ExecStart=/opt/powmr-controller/venv/bin/python app.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=powmr-controller
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Status bar -->
+<div class="row mb-3">
+  <div class="col">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span id="st-battery"  class="badge bg-secondary"><i class="bi bi-battery-half"></i> BMS</span>
+      <span id="st-solax"    class="badge bg-secondary"><i class="bi bi-sun"></i> Solax</span>
+      <span id="st-powmr"    class="badge bg-secondary"><i class="bi bi-plug"></i> PowMr</span>
+      <span class="ms-auto text-muted small">Auto-refresh every 10 s &nbsp;
+        <button class="btn btn-sm btn-outline-secondary py-0" onclick="dashRefresh()">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- ── Battery BMS ────────────────────────────────────────────────────── -->
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-battery-charging text-success fs-5"></i>
+        <strong>Battery BMS</strong>
+        <span class="badge ms-auto" id="bms-up-badge">–</span>
+      </div>
+      <div class="card-body">
+
+        <!-- SOC gauge -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span class="fw-semibold">State of Charge</span>
+            <span id="bms-soc-text" class="fw-bold fs-5">–</span>
+          </div>
+          <div class="progress" style="height:18px">
+            <div id="bms-soc-bar" class="progress-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="row g-2 text-center mb-3">
+          <div class="col-6">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Pack Voltage</div>
+              <div class="fs-5 fw-bold" id="bms-voltage">–</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Pack Current</div>
+              <div class="fs-5 fw-bold" id="bms-current">–</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Temperature</div>
+              <div class="fw-bold" id="bms-temp">–</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Capacity</div>
+              <div class="fw-bold" id="bms-cap">–</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cell voltages -->
+        <div id="bms-cells-wrap">
+          <div class="small text-muted mb-1">Cell Voltages</div>
+          <div id="bms-cells" class="d-flex flex-wrap gap-1"></div>
+        </div>
+
+        <!-- Status flags -->
+        <div class="mt-3 d-flex flex-wrap gap-2" id="bms-flags"></div>
+
+        <div class="mt-2 text-muted small">
+          Cycles: <span id="bms-cycles">–</span> &nbsp;|&nbsp;
+          Cells: <span id="bms-cellcount">–</span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /battery -->
+
+  <!-- ── Solax Inverters ────────────────────────────────────────────────── -->
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-sun-fill text-warning fs-5"></i>
+        <strong>Solax Inverters</strong>
+      </div>
+      <div class="card-body" id="solax-container">
+        <div class="text-muted">Loading…</div>
+      </div>
+    </div>
+  </div><!-- /solax -->
+
+  <!-- ── PowMr Inverter ────────────────────────────────────────────────── -->
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-plug-fill text-primary fs-5"></i>
+        <strong>PowMr Inverter</strong>
+        <span class="badge ms-auto" id="powmr-mode-badge">–</span>
+      </div>
+      <div class="card-body">
+
+        <!-- Key stats -->
+        <div class="row g-2 text-center mb-3">
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Batt V</div>
+              <div class="fw-bold" id="pmr-batt-v">–</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Batt SOC</div>
+              <div class="fw-bold" id="pmr-batt-soc">–</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">AC In</div>
+              <div class="fw-bold" id="pmr-ac-in">–</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">PV</div>
+              <div class="fw-bold" id="pmr-pv">–</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Load</div>
+              <div class="fw-bold" id="pmr-load">–</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="card bg-light py-2">
+              <div class="small text-muted">Temp</div>
+              <div class="fw-bold" id="pmr-temp">–</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-3" id="pmr-status-flags"></div>
+
+        <hr>
+        <!-- ── Controls ──────────────────────────────────────────────────── -->
+        <h6 class="text-muted">Settings</h6>
+        <div id="pmr-controls-wrap">
+          <div class="text-muted small">Loading controls…</div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /powmr -->
+
+</div><!-- /row -->
+
+<!-- Toast for control feedback -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+  <div id="ctrl-toast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="ctrl-toast-body">Done</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Dashboard JavaScript ─────────────────────────────────────────────────────
+
+let _meta = null;  // writable_registers metadata
+
+async function loadMeta() {
+  if (_meta) return _meta;
+  const r = await fetch('/api/metadata');
+  _meta = await r.json();
+  return _meta;
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+
+function setStatus(id, ok, label) {
+  const el = document.getElementById(id);
+  el.className = `badge bg-${ok ? 'success' : 'danger'}`;
+  el.innerHTML = el.innerHTML.split('</i>')[0] + `</i> ${label}`;
+}
+
+function fmtV(v) { return v != null ? v.toFixed(1) + ' V' : '–'; }
+function fmtA(v) { return v != null ? v.toFixed(1) + ' A' : '–'; }
+function fmtW(v) { return v != null ? v.toFixed(0) + ' W' : '–'; }
+function fmtPct(v) { return v != null ? v.toFixed(0) + ' %' : '–'; }
+function fmtC(v) { return v != null ? v.toFixed(1) + ' °C' : '–'; }
+function fmtHz(v) { return v != null ? v.toFixed(2) + ' Hz' : '–'; }
+
+function badge(text, color) {
+  return `<span class="badge bg-${color}">${text}</span>`;
+}
+
+// ── BMS update ────────────────────────────────────────────────────────────────
+
+function updateBMS(d) {
+  setStatus('st-battery', d.connected, d.connected ? 'BMS OK' : 'BMS ERR');
+  document.getElementById('bms-up-badge').textContent = d.bms_up ? 'Online' : 'Offline';
+  document.getElementById('bms-up-badge').className = `badge ms-auto bg-${d.bms_up ? 'success' : 'danger'}`;
+
+  const soc = d.soc ?? 0;
+  const socEl = document.getElementById('bms-soc-text');
+  const barEl = document.getElementById('bms-soc-bar');
+  socEl.textContent = fmtPct(d.soc);
+  barEl.style.width = soc + '%';
+  barEl.className = 'progress-bar ' + (soc < 20 ? 'bg-danger' : soc < 50 ? 'bg-warning' : soc < 80 ? 'bg-info' : 'bg-success');
+
+  document.getElementById('bms-voltage').textContent = fmtV(d.pack_voltage);
+  document.getElementById('bms-current').textContent = d.pack_current != null ? (d.pack_current >= 0 ? '+' : '') + d.pack_current.toFixed(1) + ' A' : '–';
+  document.getElementById('bms-temp').textContent = `${fmtC(d.temperature_min)} / ${fmtC(d.temperature_max)}`;
+  document.getElementById('bms-cap').textContent = d.remaining_capacity != null ? d.remaining_capacity.toFixed(0) + ' Ah' : '–';
+  document.getElementById('bms-cycles').textContent = d.cycle_count ?? '–';
+  document.getElementById('bms-cellcount').textContent = d.cell_count ?? '–';
+
+  // Cell voltages
+  const cellsEl = document.getElementById('bms-cells');
+  cellsEl.innerHTML = '';
+  (d.cells || []).forEach((v, i) => {
+    const cls = v === d.cell_voltage_max ? 'bg-warning text-dark' : v === d.cell_voltage_min ? 'bg-danger' : 'bg-secondary';
+    cellsEl.innerHTML += `<span class="badge ${cls}">C${i+1}: ${v.toFixed(3)}V</span>`;
+  });
+
+  // Flags
+  const flags = [
+    [d.charge_mos,     'Charge MOS', 'success', 'danger'],
+    [d.discharge_mos,  'Dis. MOS',   'success', 'danger'],
+    [d.charger_connected, 'Charger', 'info', 'secondary'],
+    [d.load_connected,    'Load',    'info', 'secondary'],
+  ];
+  document.getElementById('bms-flags').innerHTML = flags.map(
+    ([val, lbl, ok, no]) => badge(lbl, val ? ok : no)
+  ).join('');
+}
+
+// ── Solax update ──────────────────────────────────────────────────────────────
+
+function updateSolax(d) {
+  setStatus('st-solax', d.connected, d.connected ? 'Solax OK' : 'Solax ERR');
+  const inv = d.inverters || {};
+  const keys = Object.keys(inv);
+  const container = document.getElementById('solax-container');
+
+  if (!keys.length) {
+    container.innerHTML = '<div class="text-muted">No inverter data</div>';
+    return;
+  }
+
+  const STATUS_ICON = {2:'✅', 0:'⏳', 1:'🔍', 3:'⚠️', 4:'🔴', '-1':'📴'};
+  container.innerHTML = keys.map(name => {
+    const iv = inv[name];
+    return `
+    <div class="mb-3">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <strong>${name}</strong>
+        <span class="badge bg-${iv.status === 2 ? 'success' : iv.status < 0 ? 'danger' : 'warning'}">${iv.status_label}</span>
+      </div>
+      <div class="row g-1 text-center">
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">Grid</div><div class="fw-semibold">${fmtW(iv.grid_power)}</div></div></div>
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">PV1</div><div class="fw-semibold">${fmtW(iv.pv1_power)}</div></div></div>
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">Feed-in</div><div class="fw-semibold">${fmtW(iv.feedin_power)}</div></div></div>
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">Grid V</div><div class="fw-semibold">${fmtV(iv.grid_voltage)}</div></div></div>
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">Temp</div><div class="fw-semibold">${fmtC(iv.temperature)}</div></div></div>
+        <div class="col-4"><div class="card bg-light py-1"><div class="small text-muted">Day kWh</div><div class="fw-semibold">${iv.daily_energy != null ? iv.daily_energy.toFixed(2) : '–'}</div></div></div>
+      </div>
+    </div>`;
+  }).join('<hr>');
+}
+
+// ── PowMr update ──────────────────────────────────────────────────────────────
+
+function updatePowMr(d) {
+  setStatus('st-powmr', d.connected, d.connected ? 'PowMr OK' : 'PowMr ERR');
+
+  const modeBadge = document.getElementById('powmr-mode-badge');
+  const mode = d.output_source_priority_label || '–';
+  modeBadge.textContent = mode;
+  modeBadge.className = 'badge ms-auto ' + (d.output_source_priority === 2 ? 'bg-success' : d.output_source_priority === 0 ? 'bg-warning text-dark' : 'bg-info');
+
+  document.getElementById('pmr-batt-v').textContent   = fmtV(d.battery_voltage);
+  document.getElementById('pmr-batt-soc').textContent = fmtPct(d.battery_soc);
+  document.getElementById('pmr-ac-in').textContent    = fmtV(d.ac_input_voltage);
+  document.getElementById('pmr-pv').textContent       = fmtV(d.pv_voltage);
+  document.getElementById('pmr-load').textContent     = `${fmtW(d.load_power)} (${fmtPct(d.load_percent)})`;
+  document.getElementById('pmr-temp').textContent     = fmtC(d.temperature);
+
+  const flagDefs = [
+    [d.on_battery,   'On Battery', 'warning text-dark', 'secondary'],
+    [d.ac_active,    'AC Active',  'success', 'secondary'],
+    [d.load_enabled, 'Load On',    'info',    'secondary'],
+  ];
+  document.getElementById('pmr-status-flags').innerHTML = flagDefs.map(
+    ([val, lbl, ok, no]) => badge(lbl, val ? ok : no)
+  ).join('');
+}
+
+// ── Controls (built once from metadata) ───────────────────────────────────────
+
+let _controlsBuilt = false;
+let _currentPowMrData = {};
+
+async function buildControls(d) {
+  _currentPowMrData = d;
+  if (_controlsBuilt) { syncControls(d); return; }
+  _controlsBuilt = true;
+
+  const meta = await loadMeta();
+  const regs = meta.writable_registers || [];
+  const wrap = document.getElementById('pmr-controls-wrap');
+  wrap.innerHTML = '';
+
+  regs.forEach(reg => {
+    const row = document.createElement('div');
+    row.className = 'row align-items-center g-1 mb-2';
+
+    let input = '';
+    if (reg.type === 'select') {
+      input = `<select class="form-select form-select-sm" id="ctrl-${reg.register}">` +
+        reg.options.map(o => `<option value="${o.value}">${o.label}</option>`).join('') +
+        `</select>`;
+    } else {
+      input = `<input type="number" class="form-control form-control-sm"
+                 id="ctrl-${reg.register}"
+                 min="${reg.min ?? ''}" max="${reg.max ?? ''}" step="${reg.step ?? 1}">`;
+    }
+
+    row.innerHTML = `
+      <div class="col-6 small text-truncate" title="${reg.name}">${reg.name}</div>
+      <div class="col-4">${input}</div>
+      <div class="col-2">
+        <button class="btn btn-sm btn-primary w-100"
+                onclick="applyControl(${reg.register}, '${reg.type}', ${reg.scale ?? 1})">
+          Set
+        </button>
+      </div>`;
+    wrap.appendChild(row);
+  });
+
+  syncControls(d);
+}
+
+function syncControls(d) {
+  // Map PowMr data keys to register numbers for pre-filling
+  const MAP = {
+    5018: d.output_source_priority,
+    5017: d.charger_source_priority,
+    5024: d.max_utility_charge_current,
+    5022: d.max_total_charge_current,
+    5025: d.back_to_utility_voltage,
+    5026: d.back_to_battery_voltage,
+    5027: d.bulk_charge_voltage,
+    5028: d.float_charge_voltage,
+    5029: d.low_cutoff_voltage,
+  };
+  Object.entries(MAP).forEach(([reg, val]) => {
+    const el = document.getElementById(`ctrl-${reg}`);
+    if (el && val != null) el.value = val;
+  });
+}
+
+async function applyControl(register, type, scale) {
+  const el = document.getElementById(`ctrl-${register}`);
+  if (!el) return;
+  let value = parseFloat(el.value);
+  if (isNaN(value)) return;
+  if (scale && scale !== 1) value = Math.round(value * scale);
+
+  const res = await fetch('/api/powmr/control', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({register, value}),
+  });
+  const data = await res.json();
+  showToast(res.ok ? 'success' : 'danger', res.ok ? 'Setting applied!' : (data.error || 'Failed'));
+  if (res.ok) dashRefresh();
+}
+
+// ── Toast helper ──────────────────────────────────────────────────────────────
+
+function showToast(type, msg) {
+  const t = document.getElementById('ctrl-toast');
+  const b = document.getElementById('ctrl-toast-body');
+  t.className = `toast align-items-center text-bg-${type} border-0`;
+  b.textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(t, {delay: 3000}).show();
+}
+
+// ── Main refresh loop ─────────────────────────────────────────────────────────
+
+async function dashRefresh() {
+  try {
+    const r = await fetch('/api/data');
+    if (!r.ok) return;
+    const data = await r.json();
+    updateBMS(data.battery   || {});
+    updateSolax(data.solax   || {});
+    updatePowMr(data.powmr   || {});
+    buildControls(data.powmr || {});
+  } catch(e) {
+    console.error('dashRefresh error:', e);
+  }
+}
+
+dashRefresh();
+setInterval(dashRefresh, 10000);
+</script>
+{% endblock %}

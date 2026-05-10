@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-robot"></i> Automation Rules</h4>
+  <button class="btn btn-primary" onclick="openRuleModal()">
+    <i class="bi bi-plus-lg"></i> New Rule
+  </button>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle" id="rules-table">
+    <thead class="table-dark">
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Interval</th>
+        <th>Cooldown</th>
+        <th>Last Triggered</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="rules-tbody">
+      <tr><td colspan="6" class="text-center text-muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Rule log panel (shown below table when expanded) -->
+<div id="rule-log-panel" class="mt-3" style="display:none">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between">
+      <strong>Execution Log – <span id="log-rule-name"></span></strong>
+      <button class="btn btn-sm btn-outline-secondary" onclick="closeLog()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Time</th><th>Triggered</th><th>Message</th></tr></thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Rule create / edit modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="rule-modal-title">New Rule</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rule-id">
+
+        <!-- Basic settings -->
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Rule Name</label>
+            <input type="text" class="form-control" id="rule-name" placeholder="e.g. Low SOC → USB mode">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Evaluation Interval (s)</label>
+            <input type="number" class="form-control" id="rule-interval" value="60" min="10">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Cooldown (s)</label>
+            <input type="number" class="form-control" id="rule-cooldown" value="300" min="0">
+            <div class="form-text">Min. seconds between triggers</div>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="rule-enabled" checked>
+              <label class="form-check-label" for="rule-enabled">Enabled</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Conditions -->
+        <h6 class="border-bottom pb-1">
+          Conditions <small class="text-muted">(ALL must be true — AND logic)</small>
+        </h6>
+        <div id="conditions-container" class="mb-2"></div>
+        <button class="btn btn-sm btn-outline-secondary mb-4" onclick="addConditionRow()">
+          <i class="bi bi-plus-lg"></i> Add Condition
+        </button>
+
+        <!-- Action -->
+        <h6 class="border-bottom pb-1">Action</h6>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Setting to change</label>
+            <select class="form-select" id="action-register" onchange="onActionRegisterChange()"></select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Value</label>
+            <div id="action-value-wrap"></div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRule()">
+          <i class="bi bi-floppy"></i> Save Rule
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Rules page JavaScript ─────────────────────────────────────────────────────
+
+let _meta = null;
+let _rules = [];
+
+async function getMeta() {
+  if (_meta) return _meta;
+  const r = await fetch('/api/metadata');
+  _meta = await r.json();
+  return _meta;
+}
+
+// ── Load and render rules table ───────────────────────────────────────────────
+
+async function loadRules() {
+  const r = await fetch('/api/rules');
+  _rules = await r.json();
+  renderRules();
+}
+
+function renderRules() {
+  const tbody = document.getElementById('rules-tbody');
+  if (!_rules.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No rules defined yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _rules.map(rule => {
+    const lt = rule.last_triggered ? new Date(rule.last_triggered).toLocaleString() : 'Never';
+    return `
+    <tr>
+      <td><strong>${escHtml(rule.name)}</strong></td>
+      <td>
+        <span class="badge bg-${rule.enabled ? 'success' : 'secondary'}">
+          ${rule.enabled ? 'Enabled' : 'Disabled'}
+        </span>
+      </td>
+      <td>${rule.interval_seconds} s</td>
+      <td>${rule.cooldown_seconds} s</td>
+      <td class="text-muted small">${lt}</td>
+      <td>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary"  onclick="openRuleModal(${rule.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-outline-${rule.enabled ? 'warning' : 'success'}" onclick="toggleRule(${rule.id})" title="${rule.enabled ? 'Disable' : 'Enable'}">
+            <i class="bi bi-${rule.enabled ? 'pause' : 'play'}"></i>
+          </button>
+          <button class="btn btn-outline-info"    onclick="showLog(${rule.id}, '${escHtml(rule.name)}')" title="Logs"><i class="bi bi-list-ul"></i></button>
+          <button class="btn btn-outline-danger"  onclick="deleteRule(${rule.id})" title="Delete"><i class="bi bi-trash"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+
+let _conditionIndex = 0;
+
+async function openRuleModal(ruleId) {
+  const meta = await getMeta();
+  _conditionIndex = 0;
+  document.getElementById('conditions-container').innerHTML = '';
+  document.getElementById('rule-id').value      = ruleId || '';
+  document.getElementById('rule-name').value    = '';
+  document.getElementById('rule-interval').value = 60;
+  document.getElementById('rule-cooldown').value = 300;
+  document.getElementById('rule-enabled').checked = true;
+  document.getElementById('rule-modal-title').textContent = ruleId ? 'Edit Rule' : 'New Rule';
+
+  // Build action register dropdown
+  const ar = document.getElementById('action-register');
+  ar.innerHTML = meta.available_actions.map(a =>
+    `<option value="${a.register}" data-type="${a.type}"
+             data-opts='${JSON.stringify(a.options || [])}'
+             data-min="${a.min ?? ''}" data-max="${a.max ?? ''}">
+       ${escHtml(a.name)}
+     </option>`
+  ).join('');
+  onActionRegisterChange();
+
+  if (ruleId) {
+    const r = await fetch(`/api/rules/${ruleId}`);
+    const rule = await r.json();
+    document.getElementById('rule-name').value     = rule.name;
+    document.getElementById('rule-interval').value = rule.interval_seconds;
+    document.getElementById('rule-cooldown').value = rule.cooldown_seconds;
+    document.getElementById('rule-enabled').checked = rule.enabled;
+
+    rule.conditions.forEach(c => addConditionRow(c));
+
+    // Set action
+    ar.value = rule.action.register;
+    onActionRegisterChange();
+    const avEl = document.getElementById('action-value');
+    if (avEl) avEl.value = rule.action.value;
+  } else {
+    addConditionRow();
+  }
+
+  new bootstrap.Modal(document.getElementById('ruleModal')).show();
+}
+
+function onActionRegisterChange() {
+  const ar = document.getElementById('action-register');
+  const opt = ar.options[ar.selectedIndex];
+  if (!opt) return;
+  const type = opt.dataset.type;
+  const wrap = document.getElementById('action-value-wrap');
+
+  if (type === 'select') {
+    const opts = JSON.parse(opt.dataset.opts || '[]');
+    wrap.innerHTML = `<select class="form-select" id="action-value">` +
+      opts.map(o => `<option value="${o.value}">${escHtml(o.label)}</option>`).join('') +
+      `</select>`;
+  } else {
+    wrap.innerHTML = `<input type="number" class="form-control" id="action-value"
+       min="${opt.dataset.min}" max="${opt.dataset.max}" step="1">`;
+  }
+}
+
+async function addConditionRow(existing) {
+  const idx  = _conditionIndex++;
+  const meta = await getMeta();
+  const meta_metrics = meta.available_metrics || {};
+  const inverters    = meta.solax_inverters   || [];
+
+  const row = document.createElement('div');
+  row.className = 'row g-2 align-items-end mb-2 condition-row';
+  row.dataset.idx = idx;
+
+  row.innerHTML = `
+    <div class="col-md-2">
+      <label class="form-label small">Source</label>
+      <select class="form-select form-select-sm cond-source" onchange="onSourceChange(${idx})">
+        <option value="battery">Battery BMS</option>
+        <option value="solax">Solax</option>
+        <option value="powmr">PowMr</option>
+      </select>
+    </div>
+    <div class="col-md-2 cond-inverter-wrap" style="display:none">
+      <label class="form-label small">Inverter</label>
+      <select class="form-select form-select-sm cond-inverter">
+        ${inverters.map(i => `<option value="${i}">${escHtml(i)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small">Metric</label>
+      <select class="form-select form-select-sm cond-metric"></select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">Operator</label>
+      <select class="form-select form-select-sm cond-op">
+        <option><</option><option>></option>
+        <option><=</option><option>>=</option>
+        <option>==</option><option>!=</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">Value</label>
+      <input type="number" step="any" class="form-control form-control-sm cond-val">
+    </div>
+    <div class="col-md-1">
+      <button class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="removeCondition(${idx})">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`;
+
+  document.getElementById('conditions-container').appendChild(row);
+  populateMetrics(idx, 'battery', meta.available_metrics || {});
+
+  if (existing) {
+    row.querySelector('.cond-source').value = existing.source;
+    const invWrap = row.querySelector('.cond-inverter-wrap');
+    invWrap.style.display = existing.source === 'solax' ? '' : 'none';
+    populateMetrics(idx, existing.source, meta.available_metrics || {});
+    row.querySelector('.cond-metric').value = existing.metric;
+    if (existing.source === 'solax' && existing.label_filter?.inverter) {
+      row.querySelector('.cond-inverter').value = existing.label_filter.inverter;
+    }
+    row.querySelector('.cond-op').value  = existing.operator;
+    row.querySelector('.cond-val').value = existing.value;
+  }
+}
+
+function onSourceChange(idx) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  const src = row.querySelector('.cond-source').value;
+  const invWrap = row.querySelector('.cond-inverter-wrap');
+  invWrap.style.display = src === 'solax' ? '' : 'none';
+  getMeta().then(meta => populateMetrics(idx, src, meta.available_metrics || {}));
+}
+
+function populateMetrics(idx, source, metricsMap) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const sel = row.querySelector('.cond-metric');
+  const metrics = metricsMap[source] || {};
+  sel.innerHTML = Object.entries(metrics).map(
+    ([k, v]) => `<option value="${k}">${escHtml(v)}</option>`
+  ).join('');
+}
+
+function removeCondition(idx) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  if (row) row.remove();
+}
+
+function collectConditions() {
+  const rows = document.querySelectorAll('.condition-row');
+  return Array.from(rows).map(row => {
+    const src  = row.querySelector('.cond-source').value;
+    const cond = {
+      source:   src,
+      metric:   row.querySelector('.cond-metric').value,
+      operator: row.querySelector('.cond-op').value,
+      value:    parseFloat(row.querySelector('.cond-val').value),
+    };
+    if (src === 'solax') {
+      cond.label_filter = {inverter: row.querySelector('.cond-inverter').value};
+    }
+    return cond;
+  });
+}
+
+async function saveRule() {
+  const meta = await getMeta();
+  const ruleId = document.getElementById('rule-id').value;
+  const ar   = document.getElementById('action-register');
+  const avEl = document.getElementById('action-value');
+  const regNum = parseInt(ar.value);
+  const actMeta = meta.available_actions.find(a => a.register === regNum);
+
+  const body = {
+    name:             document.getElementById('rule-name').value.trim(),
+    enabled:          document.getElementById('rule-enabled').checked,
+    interval_seconds: parseInt(document.getElementById('rule-interval').value),
+    cooldown_seconds: parseInt(document.getElementById('rule-cooldown').value),
+    conditions:       collectConditions(),
+    action: {
+      register:    regNum,
+      value:       parseInt(avEl.value),
+      description: actMeta?.name || '',
+    },
+  };
+
+  if (!body.name) { alert('Please enter a rule name.'); return; }
+  if (!body.conditions.length) { alert('Add at least one condition.'); return; }
+
+  const url    = ruleId ? `/api/rules/${ruleId}` : '/api/rules';
+  const method = ruleId ? 'PUT' : 'POST';
+  const r = await fetch(url, {
+    method,
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('ruleModal')).hide();
+    loadRules();
+  } else {
+    const e = await r.json();
+    alert('Error: ' + (e.error || 'Unknown error'));
+  }
+}
+
+async function toggleRule(id) {
+  await fetch(`/api/rules/${id}/toggle`, {method: 'POST'});
+  loadRules();
+}
+
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  await fetch(`/api/rules/${id}`, {method: 'DELETE'});
+  loadRules();
+  closeLog();
+}
+
+// ── Log panel ─────────────────────────────────────────────────────────────────
+
+async function showLog(ruleId, ruleName) {
+  document.getElementById('log-rule-name').textContent = ruleName;
+  document.getElementById('rule-log-panel').style.display = '';
+  const r = await fetch(`/api/rules/${ruleId}/logs`);
+  const logs = await r.json();
+  const tbody = document.getElementById('log-tbody');
+  if (!logs.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No logs yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = logs.map(l => `
+    <tr>
+      <td class="small">${new Date(l.timestamp).toLocaleString()}</td>
+      <td><span class="badge bg-${l.triggered ? 'success' : 'secondary'}">${l.triggered ? 'Yes' : 'No'}</span></td>
+      <td class="small">${escHtml(l.message || '')}</td>
+    </tr>`).join('');
+}
+
+function closeLog() {
+  document.getElementById('rule-log-panel').style.display = 'none';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadRules();
+</script>
+{% endblock %}
