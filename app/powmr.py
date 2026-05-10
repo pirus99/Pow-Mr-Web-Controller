@@ -222,13 +222,8 @@ class PowMrClient:
         with self._lock:
             try:
                 self._ensure_connected()
-                # The PowMr inverter expects little-endian byte order (same quirk as
-                # reads).  Swap the two bytes of the 16-bit value before sending so
-                # the device receives the correct number.
-                raw = int(value) & 0xFFFF
-                wire_value = ((raw & 0xFF) << 8) | ((raw >> 8) & 0xFF)
                 result = self._client.write_register(
-                    address=address, value=wire_value, slave=SLAVE_ID
+                    address=address, value=int(value) & 0xFFFF, slave=SLAVE_ID
                 )
                 if hasattr(result, "isError") and result.isError():
                     return False, str(result)
