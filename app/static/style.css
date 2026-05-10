@@ -1,0 +1,45 @@
+/* PowMr Controller – custom styles */
+
+body {
+  background-color: #f0f2f5;
+}
+
+.card {
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+
+.card-header {
+  background-color: #fff;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.navbar-brand {
+  letter-spacing: .02em;
+}
+
+/* SOC progress bar */
+.progress {
+  border-radius: 6px;
+}
+
+/* Compact stat cards */
+.card.bg-light {
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+/* Table row hover */
+#rules-table tbody tr:hover {
+  background-color: rgba(0,0,0,.025);
+}
+
+/* Toast */
+#ctrl-toast {
+  min-width: 220px;
+}
+
+/* Cell badge */
+.badge {
+  font-size: .78em;
+}
