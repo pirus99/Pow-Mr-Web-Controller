@@ -66,6 +66,9 @@ POWMR_PORT = os.environ.get('POWMR_PORT', '/dev/ttyUSB0')
 POWMR_BAUDRATE = int(os.environ.get('POWMR_BAUDRATE', '2400'))
 POWMR_SLAVE_ID = int(os.environ.get('POWMR_SLAVE_ID', '5'))
 POWMR_TIMEOUT = float(os.environ.get('POWMR_TIMEOUT', '3'))
+POWMR_BYTESIZE = int(os.environ.get('POWMR_BYTESIZE', '8'))
+POWMR_PARITY = os.environ.get('POWMR_PARITY', 'N')
+POWMR_STOPBITS = int(os.environ.get('POWMR_STOPBITS', '1'))
 
 # External Prometheus endpoints
 SOLAX_METRICS_URL = os.environ.get('SOLAX_METRICS_URL', 'http://localhost:9090/metrics')

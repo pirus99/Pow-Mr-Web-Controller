@@ -71,26 +71,82 @@ _client_lock = threading.Lock()
 _modbus_client = None
 
 
-def _get_client():
-    """Return a connected Modbus RTU client, creating one if needed."""
+def _is_client_connected(client: Any) -> bool:
+    """
+    Best-effort connectivity check compatible with multiple pymodbus versions.
+    """
+    if client is None:
+        return False
+    for attr_name in ('connected', 'is_socket_open'):
+        attr = getattr(client, attr_name, None)
+        try:
+            if callable(attr):
+                return bool(attr())
+            if attr is not None:
+                return bool(attr)
+        except Exception:
+            continue
+    transport = getattr(client, 'transport', None)
+    if transport is not None:
+        is_open = getattr(transport, 'is_open', None)
+        if isinstance(is_open, bool):
+            return is_open
+    return False
+
+
+def _reset_client_locked() -> None:
+    """Close and clear cached client. Caller must hold _client_lock."""
     global _modbus_client
+    if _modbus_client is not None:
+        try:
+            _modbus_client.close()
+        except Exception:
+            pass
+    _modbus_client = None
+
+
+def _reset_client() -> None:
+    with _client_lock:
+        _reset_client_locked()
+
+
+def _build_client():
     try:
+        from pymodbus import FramerType
         from pymodbus.client import ModbusSerialClient
-        with _client_lock:
-            if _modbus_client is None or not _modbus_client.is_socket_open():
-                _modbus_client = ModbusSerialClient(
-                    port=settings.POWMR_PORT,
-                    baudrate=settings.POWMR_BAUDRATE,
-                    bytesize=8,
-                    parity='N',
-                    stopbits=1,
-                    timeout=settings.POWMR_TIMEOUT,
-                )
-                _modbus_client.connect()
-            return _modbus_client
+        client = ModbusSerialClient(
+            port=settings.POWMR_PORT,
+            framer=FramerType.RTU,
+            baudrate=settings.POWMR_BAUDRATE,
+            bytesize=settings.POWMR_BYTESIZE,
+            parity=settings.POWMR_PARITY,
+            stopbits=settings.POWMR_STOPBITS,
+            timeout=settings.POWMR_TIMEOUT,
+        )
+        if not client.connect():
+            logger.error(
+                "Could not connect to inverter serial port %s (baud=%s parity=%s stopbits=%s)",
+                settings.POWMR_PORT,
+                settings.POWMR_BAUDRATE,
+                settings.POWMR_PARITY,
+                settings.POWMR_STOPBITS,
+            )
+            return None
+        return client
     except Exception as exc:
         logger.error("Could not connect to inverter on %s: %s", settings.POWMR_PORT, exc)
         return None
+
+
+def _get_client():
+    """Return a connected Modbus RTU client, creating one if needed."""
+    global _modbus_client
+    with _client_lock:
+        if _is_client_connected(_modbus_client):
+            return _modbus_client
+        _reset_client_locked()
+        _modbus_client = _build_client()
+        return _modbus_client
 
 
 def _parse_status_registers(regs: list) -> Dict[str, Any]:
@@ -201,6 +257,7 @@ def read_inverter_status() -> Optional[Dict[str, Any]]:
 
         if resp1.isError() or resp2.isError():
             logger.warning("Modbus read error: %s / %s", resp1, resp2)
+            _reset_client()
             return None
 
         status = _parse_status_registers(resp1.registers)
@@ -211,6 +268,7 @@ def read_inverter_status() -> Optional[Dict[str, Any]]:
 
     except Exception as exc:
         logger.error("Error reading inverter status: %s", exc)
+        _reset_client()
         return None
 
 
@@ -237,9 +295,11 @@ def write_register(register_name: str, value: int) -> bool:
             )
         if resp.isError():
             logger.warning("Modbus write error for %s=%d: %s", register_name, value, resp)
+            _reset_client()
             return False
         logger.info("Written %s=%d to register %d", register_name, value, address)
         return True
     except Exception as exc:
         logger.error("Error writing register %s: %s", register_name, exc)
+        _reset_client()
         return False

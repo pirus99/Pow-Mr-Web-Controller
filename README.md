@@ -81,6 +81,9 @@ ng serve
 |----------|---------|-------------|
 | `POWMR_PORT` | `/dev/ttyUSB0` | Serial port for PowMr inverter |
 | `POWMR_BAUDRATE` | `2400` | Baud rate (PowMr uses 2400) |
+| `POWMR_BYTESIZE` | `8` | Serial bytesize |
+| `POWMR_PARITY` | `N` | Serial parity (`N`, `E`, `O`) |
+| `POWMR_STOPBITS` | `1` | Serial stop bits |
 | `POWMR_SLAVE_ID` | `5` | Modbus slave ID |
 | `POWMR_TIMEOUT` | `3` | Serial timeout in seconds |
 | `SOLAX_METRICS_URL` | `http://localhost:9090/metrics` | Solax Prometheus exporter URL |
