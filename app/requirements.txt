@@ -1,4 +1,6 @@
 flask==2.2.5
+Werkzeug==2.2.3
+MarkupSafe==2.1.5
 pymodbus==3.6.9
 pyserial==3.5
 apscheduler==3.10.4
