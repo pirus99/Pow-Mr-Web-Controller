@@ -72,9 +72,16 @@ WRITABLE_REGISTERS = [
     {
         "register": 5022,
         "name": "Max Total Charge Current (A)",
-        "type": "number",
-        "min": 10,
-        "max": 80,
+        "type": "select",
+        "options": [
+            {"value": 2,  "label": "2 A"},
+            {"value": 10, "label": "10 A"},
+            {"value": 20, "label": "20 A"},
+            {"value": 30, "label": "30 A"},
+            {"value": 40, "label": "40 A"},
+            {"value": 50, "label": "50 A"},
+            {"value": 60, "label": "60 A"},
+        ],
     },
     {
         "register": 5025,

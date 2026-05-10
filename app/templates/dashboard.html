@@ -392,7 +392,9 @@ async function applyControl(register, type, scale) {
   });
   const data = await res.json();
   showToast(res.ok ? 'success' : 'danger', res.ok ? 'Setting applied!' : (data.error || 'Failed'));
-  if (res.ok) dashRefresh();
+  if (res.ok) setTimeout(() => {
+    dashRefresh()
+  }, 200);;
 }
 
 // ── Toast helper ──────────────────────────────────────────────────────────────
