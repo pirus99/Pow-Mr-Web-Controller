@@ -221,7 +221,8 @@ def api_create_rule():
             interval_seconds = int(body.get("interval_seconds", 60)),
             cooldown_seconds = int(body.get("cooldown_seconds", 300)),
             conditions       = body["conditions"],
-            action           = body["action"],
+            actions          = body["actions"],
+            fallback_actions = body.get("fallback_actions", []),
         )
     except KeyError as exc:
         return jsonify({"error": f"Missing required field: {exc}"}), 400
@@ -247,7 +248,7 @@ def api_update_rule(rule_id):
         return jsonify({"error": "not found"}), 404
 
     body = request.get_json(force=True) or {}
-    allowed = {"name", "enabled", "interval_seconds", "cooldown_seconds", "conditions", "action"}
+    allowed = {"name", "enabled", "interval_seconds", "cooldown_seconds", "conditions", "actions", "fallback_actions"}
     kwargs = {k: v for k, v in body.items() if k in allowed}
     update_rule(rule_id, **kwargs)
 

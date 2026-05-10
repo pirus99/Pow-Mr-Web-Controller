@@ -195,6 +195,7 @@ class RulesEngine:
         self.db     = db_module
         self._sched = None
         self._cooldowns: "dict[int, datetime]" = {}
+        self._fallback_cooldowns: "dict[int, datetime]" = {}
         self._lock  = threading.Lock()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -228,6 +229,7 @@ class RulesEngine:
         self._unschedule(rule_id)
         with self._lock:
             self._cooldowns.pop(rule_id, None)
+            self._fallback_cooldowns.pop(rule_id, None)
 
     # ── Scheduling helpers ────────────────────────────────────────────────────
 
@@ -255,12 +257,7 @@ class RulesEngine:
             return
 
         now = datetime.now(timezone.utc)
-
-        # Cooldown check
-        with self._lock:
-            last = self._cooldowns.get(rule_id)
-        if last and (now - last).total_seconds() < rule["cooldown_seconds"]:
-            return
+        cooldown_secs = rule["cooldown_seconds"]
 
         try:
             conditions_met = all(
@@ -272,39 +269,91 @@ class RulesEngine:
             self.db.add_rule_log(rule_id, False, msg)
             return
 
-        if not conditions_met:
-            self.db.add_rule_log(rule_id, False, "Conditions not met")
-            return
-
-        # Execute action
-        action = rule["action"]
-        ok, err = self.powmr.write_register(action["register"], action["value"])
-        if ok:
-            msg = (
-                f"Set register {action['register']} = {action['value']} "
-                f"({action.get('description', '')})"
-            )
-            logger.info("Rule '%s': %s", rule["name"], msg)
+        if conditions_met:
+            # Cooldown check for THEN actions
             with self._lock:
-                self._cooldowns[rule_id] = now
-            self.db.set_rule_last_triggered(rule_id, now.isoformat())
+                last = self._cooldowns.get(rule_id)
+            if last and (now - last).total_seconds() < cooldown_secs:
+                return
+
+            self._execute_actions(
+                rule_id, rule["name"], rule.get("actions", []), now,
+                triggered=True, cooldown_dict_key="main",
+            )
         else:
-            msg = f"Write failed: {err}"
-            logger.error("Rule '%s': %s", rule["name"], msg)
-        self.db.add_rule_log(rule_id, ok, msg)
+            # Run ELSE / fallback actions (if defined)
+            fallback = rule.get("fallback_actions") or []
+            if not fallback:
+                self.db.add_rule_log(rule_id, False, "Conditions not met")
+                return
+
+            with self._lock:
+                last_fb = self._fallback_cooldowns.get(rule_id)
+            if last_fb and (now - last_fb).total_seconds() < cooldown_secs:
+                return
+
+            self._execute_actions(
+                rule_id, rule["name"], fallback, now,
+                triggered=False, cooldown_dict_key="fallback",
+            )
+
+    def _execute_actions(self, rule_id, rule_name, actions, now, triggered, cooldown_dict_key):
+        """Write a list of register actions and log the outcome."""
+        if not actions:
+            return
+        results = []
+        any_ok = False
+        for action in actions:
+            ok, err = self.powmr.write_register(action["register"], action["value"])
+            desc = action.get("description", f"reg {action['register']}")
+            if ok:
+                results.append(f"Set {desc} = {action['value']}")
+                any_ok = True
+            else:
+                results.append(f"FAILED {desc}: {err}")
+                logger.error("Rule '%s': write failed for %s – %s", rule_name, desc, err)
+
+        msg = "; ".join(results)
+        if any_ok:
+            logger.info("Rule '%s': %s", rule_name, msg)
+            if cooldown_dict_key == "main":
+                with self._lock:
+                    self._cooldowns[rule_id] = now
+                self.db.set_rule_last_triggered(rule_id, now.isoformat())
+            else:
+                with self._lock:
+                    self._fallback_cooldowns[rule_id] = now
+        self.db.add_rule_log(rule_id, triggered and any_ok, msg)
 
     def _check_condition(self, cond):
-        value = self.store.get_metric_value(
+        lhs = self.store.get_metric_value(
             cond["source"], cond["metric"], cond.get("label_filter") or None
         )
-        if value is None:
+        if lhs is None:
             raise ValueError(
                 f"Metric {cond['source']}.{cond['metric']} is not available"
             )
+
+        value_type = cond.get("value_type", "number")
+        if value_type == "metric":
+            rhs = self.store.get_metric_value(
+                cond["value_source"],
+                cond["value_metric"],
+                cond.get("value_label_filter") or None,
+            )
+            if rhs is None:
+                raise ValueError(
+                    f"Comparison metric {cond['value_source']}.{cond['value_metric']} is not available"
+                )
+            rhs = float(rhs)
+        else:
+            # "number" or "bool" — stored as a plain numeric value
+            rhs = float(cond["value"])
+
         op = self.OPERATORS.get(cond["operator"])
         if op is None:
             raise ValueError(f"Unknown operator '{cond['operator']}'")
-        return op(float(value), float(cond["value"]))
+        return op(float(lhs), rhs)
 
 
 # ── Private utilities ─────────────────────────────────────────────────────────

@@ -32,6 +32,15 @@ def init_db():
             )
             """
         )
+        # Migration: add fallback_actions column if it doesn't exist yet
+        try:
+            conn.execute(
+                "ALTER TABLE rules ADD COLUMN fallback_actions TEXT NOT NULL DEFAULT '[]'"
+            )
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS rule_logs (
@@ -61,12 +70,12 @@ def get_rule(rule_id):
     return _parse_rule(dict(row)) if row else None
 
 
-def create_rule(name, enabled, interval_seconds, cooldown_seconds, conditions, action):
+def create_rule(name, enabled, interval_seconds, cooldown_seconds, conditions, actions, fallback_actions=None):
     with _connect() as conn:
         cur = conn.execute(
             """
-            INSERT INTO rules (name, enabled, interval_seconds, cooldown_seconds, conditions, action)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO rules (name, enabled, interval_seconds, cooldown_seconds, conditions, action, fallback_actions)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -74,7 +83,8 @@ def create_rule(name, enabled, interval_seconds, cooldown_seconds, conditions, a
                 int(interval_seconds),
                 int(cooldown_seconds),
                 json.dumps(conditions),
-                json.dumps(action),
+                json.dumps(actions),
+                json.dumps(fallback_actions or []),
             ),
         )
         conn.commit()
@@ -90,7 +100,8 @@ def update_rule(rule_id, **kwargs):
         "interval_seconds": "interval_seconds = ?",
         "cooldown_seconds": "cooldown_seconds = ?",
         "conditions":       "conditions = ?",
-        "action":           "action = ?",
+        "actions":          "action = ?",
+        "fallback_actions": "fallback_actions = ?",
     }
     sets, values = [], []
     for k, v in kwargs.items():
@@ -98,7 +109,7 @@ def update_rule(rule_id, **kwargs):
         if sql_fragment is None:
             continue
         sets.append(sql_fragment)
-        if k in ("conditions", "action") and not isinstance(v, str):
+        if k in ("conditions", "actions", "fallback_actions") and not isinstance(v, str):
             v = json.dumps(v)
         elif k == "enabled":
             v = int(bool(v))
@@ -160,6 +171,12 @@ def get_rule_logs(rule_id, limit=50):
 
 def _parse_rule(rule):
     rule["conditions"] = json.loads(rule["conditions"])
-    rule["action"] = json.loads(rule["action"])
+    # Normalize: old rules stored a single action dict; new format stores a list.
+    raw_action = json.loads(rule["action"])
+    if isinstance(raw_action, dict):
+        raw_action = [raw_action]
+    rule["actions"] = raw_action
+    rule.pop("action", None)
+    rule["fallback_actions"] = json.loads(rule.get("fallback_actions") or "[]")
     rule["enabled"] = bool(rule["enabled"])
     return rule

@@ -46,7 +46,7 @@
 
 <!-- ── Rule create / edit modal ──────────────────────────────────────────── -->
 <div class="modal fade" id="ruleModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="rule-modal-title">New Rule</h5>
@@ -59,7 +59,7 @@
         <div class="row g-3 mb-4">
           <div class="col-12">
             <label class="form-label fw-semibold">Rule Name</label>
-            <input type="text" class="form-control" id="rule-name" placeholder="e.g. Low SOC → USB mode">
+            <input type="text" class="form-control" id="rule-name" placeholder="e.g. Low SOC → SBU mode">
           </div>
           <div class="col-md-4">
             <label class="form-label">Evaluation Interval (s)</label>
@@ -79,24 +79,46 @@
         </div>
 
         <!-- Conditions -->
-        <h6 class="border-bottom pb-1">
-          Conditions <small class="text-muted">(ALL must be true — AND logic)</small>
+        <h6 class="border-bottom pb-1 mb-2">
+          <i class="bi bi-funnel"></i> Conditions
+          <small class="text-muted">(ALL must be true — AND logic)</small>
         </h6>
         <div id="conditions-container" class="mb-2"></div>
         <button class="btn btn-sm btn-outline-secondary mb-4" onclick="addConditionRow()">
           <i class="bi bi-plus-lg"></i> Add Condition
         </button>
 
-        <!-- Action -->
-        <h6 class="border-bottom pb-1">Action</h6>
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label">Setting to change</label>
-            <select class="form-select" id="action-register" onchange="onActionRegisterChange()"></select>
+        <!-- THEN actions -->
+        <div class="card mb-3 border-success">
+          <div class="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center py-2">
+            <span class="fw-semibold text-success">
+              <i class="bi bi-check2-circle"></i> THEN — Apply settings
+              <small class="text-muted fw-normal">(when all conditions are true)</small>
+            </span>
+            <button class="btn btn-sm btn-outline-success" onclick="addActionRow('actions-container')">
+              <i class="bi bi-plus-lg"></i> Add Setting
+            </button>
           </div>
-          <div class="col-md-6">
-            <label class="form-label">Value</label>
-            <div id="action-value-wrap"></div>
+          <div class="card-body py-2">
+            <div id="actions-container"></div>
+            <p class="text-muted small mb-0" id="actions-empty-hint">No settings added yet.</p>
+          </div>
+        </div>
+
+        <!-- ELSE / fallback actions -->
+        <div class="card border-warning">
+          <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center py-2">
+            <span class="fw-semibold text-warning-emphasis">
+              <i class="bi bi-arrow-return-left"></i> ELSE — Fallback settings
+              <small class="text-muted fw-normal">(when conditions become false, optional)</small>
+            </span>
+            <button class="btn btn-sm btn-outline-warning" onclick="addActionRow('fallback-actions-container')">
+              <i class="bi bi-plus-lg"></i> Add Fallback
+            </button>
+          </div>
+          <div class="card-body py-2">
+            <div id="fallback-actions-container"></div>
+            <p class="text-muted small mb-0" id="fallback-empty-hint">No fallback — conditions being false is silently ignored.</p>
           </div>
         </div>
 
@@ -119,6 +141,10 @@
 
 let _meta = null;
 let _rules = [];
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 async function getMeta() {
   if (_meta) return _meta;
@@ -168,31 +194,26 @@ function renderRules() {
   }).join('');
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────────────────────
 
 let _conditionIndex = 0;
+let _actionIndex = 0;
 
 async function openRuleModal(ruleId) {
   const meta = await getMeta();
   _conditionIndex = 0;
+  _actionIndex = 0;
+
   document.getElementById('conditions-container').innerHTML = '';
-  document.getElementById('rule-id').value      = ruleId || '';
-  document.getElementById('rule-name').value    = '';
+  document.getElementById('actions-container').innerHTML = '';
+  document.getElementById('fallback-actions-container').innerHTML = '';
+  document.getElementById('rule-id').value       = ruleId || '';
+  document.getElementById('rule-name').value     = '';
   document.getElementById('rule-interval').value = 60;
   document.getElementById('rule-cooldown').value = 300;
   document.getElementById('rule-enabled').checked = true;
   document.getElementById('rule-modal-title').textContent = ruleId ? 'Edit Rule' : 'New Rule';
-
-  // Build action register dropdown
-  const ar = document.getElementById('action-register');
-  ar.innerHTML = meta.available_actions.map(a =>
-    `<option value="${a.register}" data-type="${a.type}"
-             data-opts='${JSON.stringify(a.options || [])}'
-             data-min="${a.min ?? ''}" data-max="${a.max ?? ''}">
-       ${escHtml(a.name)}
-     </option>`
-  ).join('');
-  onActionRegisterChange();
+  _updateActionHints();
 
   if (ruleId) {
     const r = await fetch(`/api/rules/${ruleId}`);
@@ -203,50 +224,32 @@ async function openRuleModal(ruleId) {
     document.getElementById('rule-enabled').checked = rule.enabled;
 
     rule.conditions.forEach(c => addConditionRow(c));
-
-    // Set action
-    ar.value = rule.action.register;
-    onActionRegisterChange();
-    const avEl = document.getElementById('action-value');
-    if (avEl) avEl.value = rule.action.value;
+    (rule.actions || []).forEach(a => addActionRow('actions-container', a));
+    (rule.fallback_actions || []).forEach(a => addActionRow('fallback-actions-container', a));
   } else {
     addConditionRow();
+    addActionRow('actions-container');
   }
 
+  _updateActionHints();
   new bootstrap.Modal(document.getElementById('ruleModal')).show();
 }
 
-function onActionRegisterChange() {
-  const ar = document.getElementById('action-register');
-  const opt = ar.options[ar.selectedIndex];
-  if (!opt) return;
-  const type = opt.dataset.type;
-  const wrap = document.getElementById('action-value-wrap');
-
-  if (type === 'select') {
-    const opts = JSON.parse(opt.dataset.opts || '[]');
-    wrap.innerHTML = `<select class="form-select" id="action-value">` +
-      opts.map(o => `<option value="${o.value}">${escHtml(o.label)}</option>`).join('') +
-      `</select>`;
-  } else {
-    wrap.innerHTML = `<input type="number" class="form-control" id="action-value"
-       min="${opt.dataset.min}" max="${opt.dataset.max}" step="1">`;
-  }
-}
+// ── Condition rows ────────────────────────────────────────────────────────────
 
 async function addConditionRow(existing) {
   const idx  = _conditionIndex++;
   const meta = await getMeta();
-  const meta_metrics = meta.available_metrics || {};
-  const inverters    = meta.solax_inverters   || [];
+  const inverters = meta.solax_inverters || [];
 
   const row = document.createElement('div');
-  row.className = 'row g-2 align-items-end mb-2 condition-row';
+  row.className = 'row g-2 align-items-start mb-2 condition-row border rounded p-2';
   row.dataset.idx = idx;
 
   row.innerHTML = `
+    <!-- LHS: source, inverter, metric -->
     <div class="col-md-2">
-      <label class="form-label small">Source</label>
+      <label class="form-label small mb-1">Source</label>
       <select class="form-select form-select-sm cond-source" onchange="onSourceChange(${idx})">
         <option value="battery">Battery BMS</option>
         <option value="solax">Solax</option>
@@ -254,62 +257,150 @@ async function addConditionRow(existing) {
       </select>
     </div>
     <div class="col-md-2 cond-inverter-wrap" style="display:none">
-      <label class="form-label small">Inverter</label>
+      <label class="form-label small mb-1">Inverter</label>
       <select class="form-select form-select-sm cond-inverter">
         ${inverters.map(i => `<option value="${i}">${escHtml(i)}</option>`).join('')}
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label small">Metric</label>
+      <label class="form-label small mb-1">Metric</label>
       <select class="form-select form-select-sm cond-metric"></select>
     </div>
-    <div class="col-md-2">
-      <label class="form-label small">Operator</label>
+    <!-- Operator -->
+    <div class="col-md-1">
+      <label class="form-label small mb-1">Op</label>
       <select class="form-select form-select-sm cond-op">
-        <option><</option><option>></option>
-        <option><=</option><option>>=</option>
+        <option>&lt;</option><option>&gt;</option>
+        <option>&lt;=</option><option>&gt;=</option>
         <option>==</option><option>!=</option>
       </select>
     </div>
+    <!-- RHS: value type selector + dynamic widget -->
     <div class="col-md-2">
-      <label class="form-label small">Value</label>
-      <input type="number" step="any" class="form-control form-control-sm cond-val">
+      <label class="form-label small mb-1">Compare to</label>
+      <select class="form-select form-select-sm cond-value-type" onchange="onCondValueTypeChange(${idx})">
+        <option value="number">Number</option>
+        <option value="bool">True / False</option>
+        <option value="metric">Reading</option>
+      </select>
     </div>
-    <div class="col-md-1">
+    <div class="col-md-2 cond-rhs-wrap">
+      <!-- filled by onCondValueTypeChange -->
+    </div>
+    <!-- Remove -->
+    <div class="col-md-1 d-flex align-items-end">
       <button class="btn btn-sm btn-outline-danger w-100" onclick="removeCondition(${idx})">
         <i class="bi bi-x"></i>
       </button>
+    </div>
+    <!-- Reading sub-selectors (shown when type=metric) -->
+    <div class="col-12 cond-rhs-metric-row" style="display:none">
+      <div class="row g-2 ms-0 mt-1 border-start ps-3">
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Reading Source</label>
+          <select class="form-select form-select-sm cond-val-source" onchange="onValSourceChange(${idx})">
+            <option value="battery">Battery BMS</option>
+            <option value="solax">Solax</option>
+            <option value="powmr">PowMr</option>
+          </select>
+        </div>
+        <div class="col-md-2 cond-val-inverter-wrap" style="display:none">
+          <label class="form-label small mb-1">Inverter</label>
+          <select class="form-select form-select-sm cond-val-inverter">
+            ${inverters.map(i => `<option value="${i}">${escHtml(i)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Metric</label>
+          <select class="form-select form-select-sm cond-val-metric"></select>
+        </div>
+      </div>
     </div>`;
 
   document.getElementById('conditions-container').appendChild(row);
-  populateMetrics(idx, 'battery', meta.available_metrics || {});
+  populateMetrics(idx, 'battery', meta.available_metrics || {}, '.cond-metric');
+  populateMetrics(idx, 'battery', meta.available_metrics || {}, '.cond-val-metric');
+  _renderCondRhs(idx, 'number');
 
   if (existing) {
-    row.querySelector('.cond-source').value = existing.source;
-    const invWrap = row.querySelector('.cond-inverter-wrap');
-    invWrap.style.display = existing.source === 'solax' ? '' : 'none';
-    populateMetrics(idx, existing.source, meta.available_metrics || {});
+    const src = existing.source;
+    row.querySelector('.cond-source').value = src;
+    if (src === 'solax') row.querySelector('.cond-inverter-wrap').style.display = '';
+    populateMetrics(idx, src, meta.available_metrics || {}, '.cond-metric');
     row.querySelector('.cond-metric').value = existing.metric;
-    if (existing.source === 'solax' && existing.label_filter?.inverter) {
+    if (src === 'solax' && existing.label_filter?.inverter) {
       row.querySelector('.cond-inverter').value = existing.label_filter.inverter;
     }
-    row.querySelector('.cond-op').value  = existing.operator;
-    row.querySelector('.cond-val').value = existing.value;
+    row.querySelector('.cond-op').value = existing.operator;
+
+    const vtype = existing.value_type || 'number';
+    row.querySelector('.cond-value-type').value = vtype;
+    _renderCondRhs(idx, vtype, existing);
+
+    if (vtype === 'metric') {
+      const vsrc = existing.value_source || 'battery';
+      row.querySelector('.cond-val-source').value = vsrc;
+      if (vsrc === 'solax') row.querySelector('.cond-val-inverter-wrap').style.display = '';
+      populateMetrics(idx, vsrc, meta.available_metrics || {}, '.cond-val-metric');
+      row.querySelector('.cond-val-metric').value = existing.value_metric || '';
+      if (vsrc === 'solax' && existing.value_label_filter?.inverter) {
+        row.querySelector('.cond-val-inverter').value = existing.value_label_filter.inverter;
+      }
+    }
   }
+}
+
+function _renderCondRhs(idx, vtype, existing) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const wrap = row.querySelector('.cond-rhs-wrap');
+  const metricRow = row.querySelector('.cond-rhs-metric-row');
+
+  if (vtype === 'number') {
+    wrap.innerHTML = `<label class="form-label small mb-1">&nbsp;</label>
+      <input type="number" step="any" class="form-control form-control-sm cond-val"
+             value="${existing?.value ?? ''}">`;
+    metricRow.style.display = 'none';
+  } else if (vtype === 'bool') {
+    const sel = existing?.value == 0 ? 'selected' : '';
+    wrap.innerHTML = `<label class="form-label small mb-1">&nbsp;</label>
+      <select class="form-select form-select-sm cond-val">
+        <option value="1" ${!sel ? 'selected' : ''}>True (1)</option>
+        <option value="0" ${sel}>False (0)</option>
+      </select>`;
+    metricRow.style.display = 'none';
+  } else {
+    wrap.innerHTML = `<label class="form-label small mb-1">&nbsp;</label>
+      <span class="form-control-plaintext form-control-sm text-muted small">↓ select below</span>`;
+    metricRow.style.display = '';
+  }
+}
+
+function onCondValueTypeChange(idx) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  const vtype = row.querySelector('.cond-value-type').value;
+  _renderCondRhs(idx, vtype);
 }
 
 function onSourceChange(idx) {
   const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
   const src = row.querySelector('.cond-source').value;
-  const invWrap = row.querySelector('.cond-inverter-wrap');
-  invWrap.style.display = src === 'solax' ? '' : 'none';
-  getMeta().then(meta => populateMetrics(idx, src, meta.available_metrics || {}));
+  row.querySelector('.cond-inverter-wrap').style.display = src === 'solax' ? '' : 'none';
+  getMeta().then(meta => populateMetrics(idx, src, meta.available_metrics || {}, '.cond-metric'));
 }
 
-function populateMetrics(idx, source, metricsMap) {
+function onValSourceChange(idx) {
+  const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
+  const src = row.querySelector('.cond-val-source').value;
+  row.querySelector('.cond-val-inverter-wrap').style.display = src === 'solax' ? '' : 'none';
+  getMeta().then(meta => populateMetrics(idx, src, meta.available_metrics || {}, '.cond-val-metric'));
+}
+
+function populateMetrics(idx, source, metricsMap, selector) {
   const row = document.querySelector(`.condition-row[data-idx="${idx}"]`);
   if (!row) return;
-  const sel = row.querySelector('.cond-metric');
+  const sel = row.querySelector(selector);
+  if (!sel) return;
   const metrics = metricsMap[source] || {};
   sel.innerHTML = Object.entries(metrics).map(
     ([k, v]) => `<option value="${k}">${escHtml(v)}</option>`
@@ -324,27 +415,137 @@ function removeCondition(idx) {
 function collectConditions() {
   const rows = document.querySelectorAll('.condition-row');
   return Array.from(rows).map(row => {
-    const src  = row.querySelector('.cond-source').value;
-    const cond = {
-      source:   src,
-      metric:   row.querySelector('.cond-metric').value,
-      operator: row.querySelector('.cond-op').value,
-      value:    parseFloat(row.querySelector('.cond-val').value),
+    const src   = row.querySelector('.cond-source').value;
+    const vtype = row.querySelector('.cond-value-type').value;
+    const cond  = {
+      source:     src,
+      metric:     row.querySelector('.cond-metric').value,
+      operator:   row.querySelector('.cond-op').value,
+      value_type: vtype,
     };
     if (src === 'solax') {
       cond.label_filter = {inverter: row.querySelector('.cond-inverter').value};
+    }
+    if (vtype === 'metric') {
+      const vsrc = row.querySelector('.cond-val-source').value;
+      cond.value_source = vsrc;
+      cond.value_metric = row.querySelector('.cond-val-metric').value;
+      if (vsrc === 'solax') {
+        cond.value_label_filter = {inverter: row.querySelector('.cond-val-inverter').value};
+      }
+    } else {
+      cond.value = parseFloat(row.querySelector('.cond-val').value);
     }
     return cond;
   });
 }
 
-async function saveRule() {
+// ── Action rows ───────────────────────────────────────────────────────────────
+
+async function addActionRow(containerId, existing) {
+  const idx  = _actionIndex++;
   const meta = await getMeta();
-  const ruleId = document.getElementById('rule-id').value;
-  const ar   = document.getElementById('action-register');
-  const avEl = document.getElementById('action-value');
-  const regNum = parseInt(ar.value);
-  const actMeta = meta.available_actions.find(a => a.register === regNum);
+  const actions = meta.available_actions || [];
+
+  const row = document.createElement('div');
+  row.className = 'row g-2 align-items-end mb-2 action-row';
+  row.dataset.actionIdx = idx;
+  row.dataset.container = containerId;
+
+  const optsHtml = actions.map(a =>
+    `<option value="${a.register}" data-type="${a.type}"
+             data-opts='${JSON.stringify(a.options || [])}'
+             data-min="${a.min ?? ''}" data-max="${a.max ?? ''}">
+       ${escHtml(a.name)}
+     </option>`
+  ).join('');
+
+  row.innerHTML = `
+    <div class="col-md-5">
+      <label class="form-label small mb-1">Setting</label>
+      <select class="form-select form-select-sm action-register"
+              onchange="onActionRowRegisterChange(${idx})">
+        ${optsHtml}
+      </select>
+    </div>
+    <div class="col-md-5">
+      <label class="form-label small mb-1">Value</label>
+      <div class="action-value-wrap"></div>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="btn btn-sm btn-outline-danger w-100"
+              onclick="removeActionRow(${idx})">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`;
+
+  document.getElementById(containerId).appendChild(row);
+  _renderActionValue(idx);
+  _updateActionHints();
+
+  if (existing) {
+    row.querySelector('.action-register').value = existing.register;
+    _renderActionValue(idx);
+    const valEl = row.querySelector('.action-value-wrap select, .action-value-wrap input');
+    if (valEl) valEl.value = existing.value;
+  }
+}
+
+function _renderActionValue(idx) {
+  const row = document.querySelector(`.action-row[data-action-idx="${idx}"]`);
+  if (!row) return;
+  const sel  = row.querySelector('.action-register');
+  const opt  = sel.options[sel.selectedIndex];
+  if (!opt) return;
+  const wrap = row.querySelector('.action-value-wrap');
+  const type = opt.dataset.type;
+
+  if (type === 'select') {
+    const opts = JSON.parse(opt.dataset.opts || '[]');
+    wrap.innerHTML = `<select class="form-select form-select-sm">` +
+      opts.map(o => `<option value="${o.value}">${escHtml(o.label)}</option>`).join('') +
+      `</select>`;
+  } else {
+    wrap.innerHTML = `<input type="number" class="form-control form-control-sm"
+       min="${opt.dataset.min}" max="${opt.dataset.max}" step="1">`;
+  }
+}
+
+function onActionRowRegisterChange(idx) {
+  _renderActionValue(idx);
+}
+
+function removeActionRow(idx) {
+  const row = document.querySelector(`.action-row[data-action-idx="${idx}"]`);
+  if (row) { row.remove(); _updateActionHints(); }
+}
+
+function _updateActionHints() {
+  const ah = document.getElementById('actions-empty-hint');
+  const fh = document.getElementById('fallback-empty-hint');
+  if (ah) ah.style.display = document.querySelectorAll('#actions-container .action-row').length ? 'none' : '';
+  if (fh) fh.style.display = document.querySelectorAll('#fallback-actions-container .action-row').length ? 'none' : '';
+}
+
+function collectActions(containerId) {
+  const rows = document.querySelectorAll(`#${containerId} .action-row`);
+  return Array.from(rows).map(row => {
+    const sel    = row.querySelector('.action-register');
+    const opt    = sel.options[sel.selectedIndex];
+    const valEl  = row.querySelector('.action-value-wrap select, .action-value-wrap input');
+    return {
+      register:    parseInt(sel.value),
+      value:       parseInt(valEl?.value ?? 0),
+      description: opt?.textContent?.trim() || '',
+    };
+  });
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+async function saveRule() {
+  const ruleId  = document.getElementById('rule-id').value;
+  const actions = collectActions('actions-container');
 
   const body = {
     name:             document.getElementById('rule-name').value.trim(),
@@ -352,15 +553,13 @@ async function saveRule() {
     interval_seconds: parseInt(document.getElementById('rule-interval').value),
     cooldown_seconds: parseInt(document.getElementById('rule-cooldown').value),
     conditions:       collectConditions(),
-    action: {
-      register:    regNum,
-      value:       parseInt(avEl.value),
-      description: actMeta?.name || '',
-    },
+    actions:          actions,
+    fallback_actions: collectActions('fallback-actions-container'),
   };
 
-  if (!body.name) { alert('Please enter a rule name.'); return; }
-  if (!body.conditions.length) { alert('Add at least one condition.'); return; }
+  if (!body.name)            { alert('Please enter a rule name.');          return; }
+  if (!body.conditions.length) { alert('Add at least one condition.');      return; }
+  if (!body.actions.length)  { alert('Add at least one THEN setting.');     return; }
 
   const url    = ruleId ? `/api/rules/${ruleId}` : '/api/rules';
   const method = ruleId ? 'PUT' : 'POST';
@@ -378,6 +577,8 @@ async function saveRule() {
     alert('Error: ' + (e.error || 'Unknown error'));
   }
 }
+
+// ── Table actions ─────────────────────────────────────────────────────────────
 
 async function toggleRule(id) {
   await fetch(`/api/rules/${id}/toggle`, {method: 'POST'});
@@ -413,10 +614,6 @@ async function showLog(ruleId, ruleName) {
 
 function closeLog() {
   document.getElementById('rule-log-panel').style.display = 'none';
-}
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 loadRules();
